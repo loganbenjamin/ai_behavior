@@ -1,17 +1,18 @@
 [package]
-name = "piston-ai_behavior"
-version = "0.32.0"
+name = "ai_behavior"
+version = "0.33.0"
 edition = "2018"
 authors = [
+    "Logan Benjamin <logan.benjamin@hotmail.com>",
     "bvssvni <bvssvni@gmail.com>",
-    "Coeuvre <coeuvre@gmail.com>"
+    "Coeuvre <coeuvre@gmail.com>",
 ]
-keywords = ["ai", "behavior", "piston", "game", "logic"]
+keywords = ["ai", "behavior", "game", "logic"]
 description = "AI behavior tree"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/pistondevelopers/ai_behavior.git"
-homepage = "https://github.com/pistondevelopers/ai_behavior"
+repository = "https://github.com/loganbenjamin/ai_behavior.git"
+homepage = "https://github.com/loganbenjamin/ai_behavior"
 autotests = false
 
 [lib]

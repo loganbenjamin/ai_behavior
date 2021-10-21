@@ -1,6 +1,9 @@
-ai_behavior [![Build Status](https://travis-ci.org/PistonDevelopers/ai_behavior.svg?branch=master)](https://travis-ci.org/PistonDevelopers/ai_behavior) [![Docs](https://docs.rs/piston-ai_behavior/badge.svg)](https://docs.rs/piston-ai_behavior)
+ai_behavior
 ===========
+This is a fork and modification of the excellent [Piston ai_behavior](https://github.com/PistonDevelopers/ai_behavior) library.
 
+The modification removes the dependancy on the pistoncore-input library and allow you to put your own input enum in its place.
+===========
 AI behavior tree
 
 You can serialize the
@@ -59,5 +62,3 @@ WhenAny([A,
   ])
 ])
 ```
-
-[How to contribute](https://github.com/PistonDevelopers/piston/blob/master/CONTRIBUTING.md)
