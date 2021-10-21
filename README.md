@@ -1,6 +1,6 @@
 This is a fork and modification of the excellent [Piston ai_behavior](https://github.com/PistonDevelopers/ai_behavior) library.
 
-The modification removes the dependancy on the pistoncore-input library and allow you to put your own input enum in its place.
+The modification removes the dependancy on the pistoncore-input library and allows you to use your own input enum in its place.
 
 ai_behavior
 ===========
