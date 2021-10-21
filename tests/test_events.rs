@@ -1,5 +1,7 @@
-use ai_behavior::{Action, Sequence, State, Success, Wait, WaitForever, WhenAll, While};
-use input::{Event, UpdateArgs};
+use ai_behavior::{
+    Action, Behavior::WaitForPressed, Behavior::WaitForReleased, Sequence, State, Success, Wait,
+    WaitForever, WhenAll, While,
+};
 
 use crate::test_events::TestActions::{Dec, Inc};
 
@@ -14,9 +16,13 @@ pub enum TestActions {
 }
 
 // A test state machine that can increment and decrement.
-fn exec(mut acc: u32, dt: f64, state: &mut State<TestActions, ()>) -> u32 {
-    let e: Event = UpdateArgs { dt }.into();
-    state.event(&e, &mut |args| match *args.action {
+fn exec<I: Clone + Copy + PartialEq>(
+    mut acc: u32,
+    dt: f64,
+    state: &mut State<I, TestActions, ()>,
+    input: &Vec<I>,
+) -> u32 {
+    state.event(Some(dt), input, &mut |args| match *args.action {
         Inc => {
             acc += 1;
             (Success, args.dt)
@@ -38,7 +44,7 @@ fn print_2() {
     let a: u32 = 0;
     let seq = Sequence(vec![Action(Inc), Action(Inc)]);
     let mut state = State::new(seq);
-    let a = exec(a, 0.0, &mut state);
+    let a = exec::<()>(a, 0.0, &mut state, &vec![]);
     assert_eq!(a, 2);
 }
 
@@ -50,7 +56,7 @@ fn wait_sec() {
     let a: u32 = 0;
     let seq = Sequence(vec![Wait(1.0), Action(Inc)]);
     let mut state = State::new(seq);
-    let a = exec(a, 1.0, &mut state);
+    let a = exec::<()>(a, 1.0, &mut state, &vec![]);
     assert_eq!(a, 1);
 }
 
@@ -61,9 +67,9 @@ fn wait_half_sec() {
     let a: u32 = 0;
     let seq = Sequence(vec![Wait(1.0), Action(Inc)]);
     let mut state = State::new(seq);
-    let a = exec(a, 0.5, &mut state);
+    let a = exec::<()>(a, 0.5, &mut state, &vec![]);
     assert_eq!(a, 0);
-    let a = exec(a, 0.5, &mut state);
+    let a = exec::<()>(a, 0.5, &mut state, &vec![]);
     assert_eq!(a, 1);
 }
 
@@ -73,7 +79,7 @@ fn sequence_of_one_event() {
     let a: u32 = 0;
     let seq = Sequence(vec![Action(Inc)]);
     let mut state = State::new(seq);
-    let a = exec(a, 1.0, &mut state);
+    let a = exec::<()>(a, 1.0, &mut state, &vec![]);
     assert_eq!(a, 1);
 }
 
@@ -83,7 +89,7 @@ fn wait_two_waits() {
     let a: u32 = 0;
     let seq = Sequence(vec![Wait(0.5), Wait(0.5), Action(Inc)]);
     let mut state = State::new(seq);
-    let a = exec(a, 1.0, &mut state);
+    let a = exec::<()>(a, 1.0, &mut state, &vec![]);
     assert_eq!(a, 1);
 }
 
@@ -96,7 +102,7 @@ fn loop_ten_times() {
         vec![Wait(0.5), Action(Inc), Wait(0.5)],
     );
     let mut state = State::new(rep);
-    let a = exec(a, 10.0, &mut state);
+    let a = exec::<()>(a, 10.0, &mut state, &vec![]);
     assert_eq!(a, 10);
 }
 
@@ -109,9 +115,9 @@ fn when_all_wait() {
         Action(Inc),
     ]);
     let mut state = State::new(all);
-    let a = exec(a, 0.5, &mut state);
+    let a = exec::<()>(a, 0.5, &mut state, &vec![]);
     assert_eq!(a, 0);
-    let a = exec(a, 0.5, &mut state);
+    let a = exec::<()>(a, 0.5, &mut state, &vec![]);
     assert_eq!(a, 1);
 }
 
@@ -129,7 +135,7 @@ fn while_wait_sequence() {
     );
     let mut state = State::new(w);
     for _ in 0..100 {
-        a = exec(a, 0.1, &mut state);
+        a = exec::<()>(a, 0.1, &mut state, &vec![]);
     }
     // The last increment is never executed, because there is not enough time.
     assert_eq!(a, 19);
@@ -143,6 +149,36 @@ fn while_wait_forever_sequence() {
         vec![Sequence(vec![Action(Inc), Wait(1.0)])],
     );
     let mut state = State::new(w);
-    a = exec(a, 1.001, &mut state);
+    a = exec::<()>(a, 1.001, &mut state, &vec![]);
     assert_eq!(a, 2);
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Input {
+    Sensor(u32),
+}
+
+#[test]
+fn input_test() {
+    let mut a: u32 = 0;
+    let seq = Sequence(vec![
+        WaitForPressed(Input::Sensor(1)),
+        Action(Inc),
+        WaitForReleased(Input::Sensor(2)),
+        Action(Dec),
+    ]);
+    let mut state = State::new(seq);
+    a = exec(a, 0.5, &mut state, &vec![]);
+    assert_eq!(a, 0);
+    a = exec(
+        a,
+        1.0,
+        &mut state,
+        &vec![Input::Sensor(1), Input::Sensor(2)],
+    );
+    assert_eq!(a, 1);
+    a = exec(a, 1.0, &mut state, &vec![Input::Sensor(2)]);
+    assert_eq!(a, 1);
+    a = exec(a, 1.0, &mut state, &vec![]);
+    assert_eq!(a, 0);
 }
