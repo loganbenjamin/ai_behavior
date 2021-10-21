@@ -1,6 +1,6 @@
 use ai_behavior::{
-    Action, Behavior::WaitForPressed, Behavior::WaitForReleased, Sequence, State, Success, Wait,
-    WaitForever, WhenAll, While,
+    Action, Behavior::WaitForOff, Behavior::WaitForOn, Sequence, State, Success, Wait, WaitForever,
+    WhenAll, While,
 };
 
 use crate::test_events::TestActions::{Dec, Inc};
@@ -22,7 +22,7 @@ fn exec<I: Clone + Copy + PartialEq>(
     state: &mut State<I, TestActions, ()>,
     input: &Vec<I>,
 ) -> u32 {
-    state.event(Some(dt), input, &mut |args| match *args.action {
+    state.event(dt, input, &mut |args| match *args.action {
         Inc => {
             acc += 1;
             (Success, args.dt)
@@ -162,20 +162,34 @@ enum Input {
 fn input_test() {
     let mut a: u32 = 0;
     let seq = Sequence(vec![
-        WaitForPressed(Input::Sensor(1)),
+        WaitForOn(Input::Sensor(1)),
         Action(Inc),
-        WaitForReleased(Input::Sensor(2)),
+        WaitForOff(Input::Sensor(1)),
         Action(Dec),
     ]);
     let mut state = State::new(seq);
     a = exec(a, 0.5, &mut state, &vec![]);
     assert_eq!(a, 0);
-    a = exec(
-        a,
-        1.0,
-        &mut state,
-        &vec![Input::Sensor(1), Input::Sensor(2)],
-    );
+    a = exec(a, 1.0, &mut state, &vec![Input::Sensor(1)]);
+    assert_eq!(a, 1);
+    a = exec(a, 1.0, &mut state, &vec![]);
+    assert_eq!(a, 0);
+}
+
+#[test]
+fn input_test_complicated() {
+    let mut a: u32 = 0;
+    let seq = Sequence(vec![
+        WaitForOn(Input::Sensor(1)),
+        Action(Inc),
+        Wait(1.5),
+        WaitForOff(Input::Sensor(2)),
+        Action(Dec),
+    ]);
+    let mut state = State::new(seq);
+    a = exec(a, 1.0, &mut state, &vec![]);
+    assert_eq!(a, 0);
+    a = exec(a, 1.0, &mut state, &vec![Input::Sensor(1)]);
     assert_eq!(a, 1);
     a = exec(a, 1.0, &mut state, &vec![Input::Sensor(2)]);
     assert_eq!(a, 1);

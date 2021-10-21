@@ -2,12 +2,12 @@ use std::f64;
 
 use crate::state::State::{
     ActionState, AfterState, AlwaysSucceedState, FailState, IfState, SelectState, SequenceState,
-    WaitForPressedState, WaitForReleasedState, WaitForeverState, WaitState, WhenAllState,
-    WhenAnyState, WhileState,
+    WaitForOffState, WaitForOnState, WaitForeverState, WaitState, WhenAllState, WhenAnyState,
+    WhileState,
 };
 use crate::{
     Action, After, AlwaysSucceed, Behavior, Fail, Failure, If, Running, Select, Sequence, Status,
-    Success, Wait, WaitForPressed, WaitForReleased, WaitForever, WhenAll, WhenAny, While,
+    Success, Wait, WaitForOff, WaitForOn, WaitForever, WhenAll, WhenAny, While,
 };
 
 /// The action is still running.
@@ -29,9 +29,9 @@ pub struct ActionArgs<'a, I: 'a, A: 'a, S: 'a> {
 #[derive(Clone, Deserialize, Serialize, PartialEq)]
 pub enum State<I, A, S> {
     /// Returns `Success` when button is pressed.
-    WaitForPressedState(I),
+    WaitForOnState(I),
     /// Returns `Success` when button is released.
-    WaitForReleasedState(I),
+    WaitForOffState(I),
     /// Executes an action.
     ActionState(A, Option<S>),
     /// Converts `Success` into `Failure` and vice versa.
@@ -51,19 +51,19 @@ pub enum State<I, A, S> {
     /// If status is `Success`, then it evaluates the success behavior.
     /// If status is `Failure`, then it evaluates the failure behavior.
     IfState(
-        Box<Behavior<A, I>>,
-        Box<Behavior<A, I>>,
+        Box<Behavior<I, A>>,
+        Box<Behavior<I, A>>,
         Status,
         Box<State<I, A, S>>,
     ),
     /// Keeps track of a `Select` behavior.
-    SelectState(Vec<Behavior<A, I>>, usize, Box<State<I, A, S>>),
+    SelectState(Vec<Behavior<I, A>>, usize, Box<State<I, A, S>>),
     /// Keeps track of an `Sequence` behavior.
-    SequenceState(Vec<Behavior<A, I>>, usize, Box<State<I, A, S>>),
+    SequenceState(Vec<Behavior<I, A>>, usize, Box<State<I, A, S>>),
     /// Keeps track of a `While` behavior.
     WhileState(
         Box<State<I, A, S>>,
-        Vec<Behavior<A, I>>,
+        Vec<Behavior<I, A>>,
         usize,
         Box<State<I, A, S>>,
     ),
@@ -81,8 +81,8 @@ pub enum State<I, A, S> {
 // `Select` succeeds if any succeeds and fails when all fails.
 fn sequence<A, S, I, F>(
     select: bool,
-    upd: Option<f64>,
-    seq: &[Behavior<A, I>],
+    upd: f64,
+    seq: &[Behavior<I, A>],
     i: &mut usize,
     cursor: &mut Box<State<I, A, S>>,
     input: &Vec<I>,
@@ -100,9 +100,9 @@ where
         // `Sequence`
         (Success, Failure)
     };
-    let mut remaining_dt = upd.unwrap_or(0.0);
+    let mut remaining_dt = upd;
     while *i < seq.len() {
-        match cursor.event(Some(remaining_dt), input, f) {
+        match cursor.event(remaining_dt, input, f) {
             (Running, _) => {
                 break;
             }
@@ -110,23 +110,24 @@ where
                 return (inv_status, new_dt);
             }
             (s, new_dt) if s == status => {
-                remaining_dt = match upd {
-                    // Change update event with remaining delta time.
-                    Some(_) => new_dt,
-                    // Other events are 'consumed' and not passed to next.
-                    // If this is the last event, then the sequence succeeded.
-                    _ => {
-                        if *i == seq.len() - 1 {
-                            return (status, new_dt);
-                        } else {
-                            *i += 1;
-                            // Create a new cursor for next event.
-                            // Use the same pointer to avoid allocation.
-                            **cursor = State::new(seq[*i].clone());
-                            return RUNNING;
-                        }
-                    }
-                }
+                remaining_dt = new_dt
+                //match upd {
+                // // Change update event with remaining delta time.
+                // Some(_) => new_dt,
+                // // Other events are 'consumed' and not passed to next.
+                // // If this is the last event, then the sequence succeeded.
+                // _ => {
+                //     if *i == seq.len() - 1 {
+                //         return (status, new_dt);
+                //     } else {
+                //         *i += 1;
+                //         // Create a new cursor for next event.
+                //         // Use the same pointer to avoid allocation.
+                //         **cursor = State::new(seq[*i].clone());
+                //         return RUNNING;
+                //     }
+                // }
+                //}
             }
             _ => unreachable!(),
         };
@@ -149,9 +150,8 @@ where
 // `WhenAny` succeeds if any succeeds and fails when all fails.
 fn when_all<A, S, I, F>(
     any: bool,
-    upd: Option<f64>,
+    dt: f64,
     cursors: &mut Vec<Option<State<I, A, S>>>,
-    dt: Option<f64>,
     input: &Vec<I>,
     f: &mut F,
 ) -> (Status, f64)
@@ -197,14 +197,7 @@ where
     }
     match terminated {
         // If there are no events, there is a whole 'dt' left.
-        0 if cursors.is_empty() => (
-            status,
-            match upd {
-                Some(dt) => dt,
-                // Other kind of events happen instantly.
-                _ => 0.0,
-            },
-        ),
+        0 if cursors.is_empty() => (status, dt),
         // If all events terminated, the least delta time is left.
         n if cursors.len() == n => (status, min_dt),
         _ => RUNNING,
@@ -213,10 +206,10 @@ where
 
 impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
     /// Creates a state from a behavior.
-    pub fn new(behavior: Behavior<A, I>) -> Self {
+    pub fn new(behavior: Behavior<I, A>) -> Self {
         match behavior {
-            WaitForPressed(button) => WaitForPressedState(button),
-            WaitForReleased(button) => WaitForReleasedState(button),
+            WaitForOn(button) => WaitForOnState(button),
+            WaitForOff(button) => WaitForOffState(button),
             Action(action) => ActionState(action, None),
             Fail(ev) => FailState(Box::new(State::new(*ev))),
             AlwaysSucceed(ev) => AlwaysSucceedState(Box::new(State::new(*ev))),
@@ -251,45 +244,45 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
     ///
     /// Passes event, delta time in seconds, action and state to closure.
     /// The closure should return a status and remaining delta time.
-    pub fn event<F>(&mut self, dt: Option<f64>, input: &Vec<I>, f: &mut F) -> (Status, f64)
+    pub fn event<F>(&mut self, dt: f64, input: &Vec<I>, f: &mut F) -> (Status, f64)
     where
         F: FnMut(ActionArgs<I, A, S>) -> (Status, f64),
     {
-        let upd = dt;
-        match (upd, self) {
-            (_, &mut WaitForPressedState(button)) => {
+        //let upd = dt;
+        match self {
+            &mut WaitForOnState(button) => {
                 if input.contains(&button) {
-                    (Success, 0.0)
+                    (Success, dt)
                 } else {
                     RUNNING
                 }
             }
-            (_, &mut WaitForReleasedState(button)) => {
+            &mut WaitForOffState(button) => {
                 if !input.contains(&button) {
-                    (Success, 0.0)
+                    (Success, dt)
                 } else {
                     RUNNING
                 }
             }
-            (_, &mut ActionState(ref action, ref mut state)) => {
+            &mut ActionState(ref action, ref mut state) => {
                 // Execute action.
                 f(ActionArgs {
                     input,
-                    dt: upd.unwrap_or(0.0),
+                    dt,
                     action,
                     state,
                 })
             }
-            (_, &mut FailState(ref mut cur)) => match cur.event(upd, input, f) {
+            &mut FailState(ref mut cur) => match cur.event(dt, input, f) {
                 (Running, dt) => (Running, dt),
                 (Failure, dt) => (Success, dt),
                 (Success, dt) => (Failure, dt),
             },
-            (_, &mut AlwaysSucceedState(ref mut cur)) => match cur.event(upd, input, f) {
+            &mut AlwaysSucceedState(ref mut cur) => match cur.event(dt, input, f) {
                 (Running, dt) => (Running, dt),
                 (_, dt) => (Success, dt),
             },
-            (Some(dt), &mut WaitState(wait_t, ref mut t)) => {
+            &mut WaitState(wait_t, ref mut t) => {
                 if *t + dt >= wait_t {
                     let remaining_dt = *t + dt - wait_t;
                     *t = wait_t;
@@ -299,13 +292,13 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                     RUNNING
                 }
             }
-            (_, &mut IfState(ref success, ref failure, ref mut status, ref mut state)) => {
-                let mut remaining_dt = upd.unwrap_or(0.0);
+            &mut IfState(ref success, ref failure, ref mut status, ref mut state) => {
+                let mut remaining_dt = dt;
                 // Run in a loop to evaluate success or failure with
                 // remaining delta time after condition.
                 loop {
                     *status = match *status {
-                        Running => match state.event(Some(remaining_dt), input, f) {
+                        Running => match state.event(remaining_dt, input, f) {
                             (Running, dt) => {
                                 return (Running, dt);
                             }
@@ -321,39 +314,32 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                             }
                         },
                         _ => {
-                            return state.event(upd, input, f);
+                            return state.event(dt, input, f);
                         }
                     }
                 }
             }
-            (_, &mut SelectState(ref seq, ref mut i, ref mut cursor)) => {
+            &mut SelectState(ref seq, ref mut i, ref mut cursor) => {
                 let select = true;
-                sequence(select, upd, seq, i, cursor, input, f)
+                sequence(select, dt, seq, i, cursor, input, f)
             }
-            (_, &mut SequenceState(ref seq, ref mut i, ref mut cursor)) => {
+            &mut SequenceState(ref seq, ref mut i, ref mut cursor) => {
                 let select = false;
-                sequence(select, upd, seq, i, cursor, input, f)
+                sequence(select, dt, seq, i, cursor, input, f)
             }
-            (_, &mut WhileState(ref mut ev_cursor, ref rep, ref mut i, ref mut cursor)) => {
+            &mut WhileState(ref mut ev_cursor, ref rep, ref mut i, ref mut cursor) => {
                 // If the event terminates, do not execute the loop.
-                match ev_cursor.event(upd, input, f) {
+                match ev_cursor.event(dt, input, f) {
                     (Running, _) => {}
                     x => return x,
                 };
                 let cur = cursor;
-                let mut remaining_dt = upd.unwrap_or(0.0);
+                let mut remaining_dt = dt;
                 loop {
-                    match cur.event(Some(remaining_dt), input, f) {
+                    match cur.event(remaining_dt, input, f) {
                         (Failure, x) => return (Failure, x),
                         (Running, _) => break,
-                        (Success, new_dt) => {
-                            remaining_dt = match upd {
-                                // Change update event with remaining delta time.
-                                Some(_) => new_dt,
-                                // Other events are 'consumed' and not passed to next.
-                                _ => return RUNNING,
-                            }
-                        }
+                        (Success, new_dt) => remaining_dt = new_dt,
                     };
                     *i += 1;
                     // If end of repeated events,
@@ -367,19 +353,19 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                 }
                 RUNNING
             }
-            (_, &mut WhenAllState(ref mut cursors)) => {
+            &mut WhenAllState(ref mut cursors) => {
                 let any = false;
-                when_all(any, upd, cursors, upd, input, f)
+                when_all(any, dt, cursors, input, f)
             }
-            (_, &mut WhenAnyState(ref mut cursors)) => {
+            &mut WhenAnyState(ref mut cursors) => {
                 let any = true;
-                when_all(any, upd, cursors, upd, input, f)
+                when_all(any, dt, cursors, input, f)
             }
-            (_, &mut AfterState(ref mut i, ref mut cursors)) => {
+            &mut AfterState(ref mut i, ref mut cursors) => {
                 // Get the least delta time left over.
                 let mut min_dt = f64::MAX;
                 for j in *i..cursors.len() {
-                    match cursors[j].event(upd, input, f) {
+                    match cursors[j].event(dt, input, f) {
                         (Running, _) => {
                             min_dt = 0.0;
                         }
