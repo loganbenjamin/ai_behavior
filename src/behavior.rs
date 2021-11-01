@@ -2,7 +2,7 @@
 ///
 /// This is used for more complex event logic.
 /// Can also be used for game AI.
-#[derive(Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub enum Behavior<I, A> {
     /// Wait for a button to be pressed.
     ///
