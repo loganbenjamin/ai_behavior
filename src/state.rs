@@ -11,7 +11,7 @@ use crate::{
 };
 
 /// The action is still running.
-pub const fn RUNNING<I>(input: Option<Vec<I>>) -> (Status, f64, Option<Vec<I>>) {
+pub fn running<I>(input: Option<Vec<I>>) -> (Status, f64, Option<Vec<I>>) {
     (Running, 0.0, input)
 }
 
@@ -138,26 +138,7 @@ where
                 // }
                 //}
             }
-            (s, new_dt, _) if s == status => {
-                remaining_dt = new_dt
-                //match upd {
-                // // Change update event with remaining delta time.
-                // Some(_) => new_dt,
-                // // Other events are 'consumed' and not passed to next.
-                // // If this is the last event, then the sequence succeeded.
-                // _ => {
-                //     if *i == seq.len() - 1 {
-                //         return (status, new_dt);
-                //     } else {
-                //         *i += 1;
-                //         // Create a new cursor for next event.
-                //         // Use the same pointer to avoid allocation.
-                //         **cursor = State::new(seq[*i].clone());
-                //         return RUNNING;
-                //     }
-                // }
-                //}
-            }
+            (s, new_dt, _) if s == status => remaining_dt = new_dt,
             _ => unreachable!(),
         };
         *i += 1;
@@ -170,7 +151,7 @@ where
         // Use the same pointer to avoid allocation.
         **cursor = State::new(seq[*i].clone());
     }
-    RUNNING(upd_input)
+    running(upd_input)
 }
 
 // `WhenAll` and `WhenAny` share same algorithm.
@@ -240,7 +221,7 @@ where
         0 if cursors.is_empty() => (status, dt, upd_input),
         // If all events terminated, the least delta time is left.
         n if cursors.len() == n => (status, min_dt, upd_input),
-        _ => RUNNING(upd_input),
+        _ => running(upd_input),
     }
 }
 
@@ -295,14 +276,14 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                 if input.contains(&button) {
                     (Success, dt, None)
                 } else {
-                    RUNNING(upd_input)
+                    running(upd_input)
                 }
             }
             &mut WaitForOffState(button) => {
                 if !input.contains(&button) {
                     (Success, dt, None)
                 } else {
-                    RUNNING(upd_input)
+                    running(upd_input)
                 }
             }
             &mut ActionState(ref action, ref mut state) => {
@@ -334,7 +315,7 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                     (Success, remaining_dt, None)
                 } else {
                     *t += dt;
-                    RUNNING(upd_input)
+                    running(upd_input)
                 }
             }
             &mut IfState(ref success, ref failure, ref mut status, ref mut state) => {
@@ -431,7 +412,7 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                     // Use the same pointer to avoid allocation.
                     **cur = State::new(rep[*i].clone());
                 }
-                RUNNING(upd_input)
+                running(upd_input)
             }
             &mut WhenAllState(ref mut cursors) => {
                 let any = false;
@@ -480,10 +461,10 @@ impl<I: Clone + Copy + Sized + PartialEq, A: Clone, S> State<I, A, S> {
                 if *i == cursors.len() {
                     (Success, min_dt, None)
                 } else {
-                    RUNNING(upd_input)
+                    running(upd_input)
                 }
             }
-            _ => RUNNING(upd_input),
+            _ => running(upd_input),
         }
     }
 }
