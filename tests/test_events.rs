@@ -3,7 +3,7 @@ use ai_behavior::{
     WhenAll, While,
 };
 
-use crate::test_events::TestActions::{Dec, Inc};
+use crate::test_events::TestActions::{Dec, Inc, SensorOn};
 
 /// Some test actions.
 #[derive(Clone)]
@@ -13,6 +13,8 @@ pub enum TestActions {
     Inc,
     /// Decrement accumulator.
     Dec,
+    /// Sensor turning on
+    SensorOn(u32),
 }
 
 // A test state machine that can increment and decrement.
@@ -25,14 +27,41 @@ fn exec<I: Clone + Copy + PartialEq>(
     state.event(dt, input, &mut |args| match *args.action {
         Inc => {
             acc += 1;
-            (Success, args.dt)
+            (Success, args.dt, None)
         }
         Dec => {
             acc -= 1;
-            (Success, args.dt)
+            (Success, args.dt, None)
         }
+        _ => (Success, args.dt, None),
     });
     acc
+}
+
+// A test state machine that can increment and decrement and update the input.
+fn exec_update_input(
+    mut acc: u32,
+    dt: f64,
+    state: &mut State<Input, TestActions, ()>,
+    input: &Vec<Input>,
+) -> (u32, Option<Vec<Input>>) {
+    let (_, _, new_input) = state.event(dt, input, &mut |args| match *args.action {
+        Inc => {
+            acc += 1;
+            (Success, args.dt, None)
+        }
+        Dec => {
+            acc -= 1;
+            (Success, args.dt, None)
+        }
+        SensorOn(num) => {
+            let mut new_input = args.input.clone();
+            new_input.push(Input::Sensor(num));
+
+            (Success, args.dt, Some(new_input))
+        }
+    });
+    (acc, new_input)
 }
 
 // Each action that terminates immediately
@@ -195,4 +224,32 @@ fn input_test_complicated() {
     assert_eq!(a, 1);
     a = exec(a, 1.0, &mut state, &vec![]);
     assert_eq!(a, 0);
+}
+
+#[test]
+fn input_update_test() {
+    let seq = Sequence(vec![
+        Action(SensorOn(1)),
+        WaitForOn(Input::Sensor(1)),
+        Action(Inc),
+    ]);
+
+    let mut state = State::new(seq);
+    let (a, input) = exec_update_input(0, 0.5, &mut state, &vec![]);
+    assert_eq!(a, 1);
+    assert_eq!(input.unwrap().len(), 1);
+}
+
+#[test]
+fn input_update_test2() {
+    let seq = Sequence(vec![
+        Action(SensorOn(2)),
+        WaitForOn(Input::Sensor(1)),
+        Action(Inc),
+    ]);
+
+    let mut state = State::new(seq);
+    let (a, input) = exec_update_input(0, 0.5, &mut state, &vec![]);
+    assert_eq!(a, 0);
+    assert_eq!(input.unwrap().len(), 1);
 }
