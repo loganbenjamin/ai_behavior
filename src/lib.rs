@@ -68,7 +68,7 @@ pub use behavior::Behavior::{
     self, Action, After, AlwaysSucceed, Fail, If, Select, Sequence, Wait, WaitForOff, WaitForOn,
     WaitForever, WhenAll, WhenAny, While,
 };
-pub use state::{ActionArgs, State, RUNNING};
+pub use state::{running, ActionArgs, State};
 pub use status::Status::{self, Failure, Running, Success};
 
 mod behavior;
